@@ -25,6 +25,8 @@ export const Footer: React.FC = () => {
   const [link, setLink] = useState("");
   const [summary, setSummary] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Domain validation logic
   const checkDomain = (val: string) => {
@@ -46,13 +48,33 @@ export const Footer: React.FC = () => {
   const wordCount = summary.trim() ? (summary.trim().match(/\S+/g) || []).length : 0;
   const isWordLimitExceeded = wordCount > 250;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!domainStatus.valid) {
       setEmailTouched(true);
       return;
     }
     if (isWordLimitExceeded) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+    const website = new FormData(e.currentTarget).get("website");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nameTitle, email, orgName, link, summary, website }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Could not send your request. Please try again.");
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not send your request. Please try again.");
+      return;
+    } finally {
+      setSubmitting(false);
+    }
 
     setFormSubmitted(true);
     setTimeout(() => {
@@ -244,13 +266,25 @@ export const Footer: React.FC = () => {
                   )}
                 </div>
 
+                {/* Honeypot: hidden from visitors, catches bots */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="hidden"
+                />
+
+                {submitError && <p className="text-[11px] text-red-400">{submitError}</p>}
+
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isWordLimitExceeded}
+                  disabled={isWordLimitExceeded || submitting}
                   className="w-full py-3.5 bg-brand-gold text-[#04120E] font-semibold text-xs uppercase tracking-[0.22em] rounded-sm hover:bg-brand-gold-light transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                 >
-                  Submit
+                  {submitting ? "Sending..." : "Submit"}
                 </button>
               </form>
             )}
