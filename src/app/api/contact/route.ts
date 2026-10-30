@@ -1,9 +1,7 @@
+import { DOMAIN_RE, MAX_SUMMARY_WORDS, countWords } from "@/lib/contact";
+
 const TO = "madhurima@manaranexus.com";
 const FROM = "Manara Nexus Website <intro@mail.manaranexus.com>";
-const EMAIL_RE = /^[^\s@]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -19,23 +17,23 @@ export async function POST(request: Request) {
   const link = field("link", 500);
   const summary = field("summary", 5000);
 
-  if (!nameTitle || !orgName || !summary || !EMAIL_RE.test(email)) {
+  const [local, domain, ...rest] = email.split("@");
+  if (!nameTitle || !orgName || !summary || !local || rest.length || !DOMAIN_RE.test(domain ?? "")) {
     return Response.json({ error: "Please fill in all required fields" }, { status: 400 });
   }
-  if ((summary.match(/\S+/g) || []).length > 250) {
-    return Response.json({ error: "Summary must be 250 words or fewer" }, { status: 400 });
+  if (countWords(summary) > MAX_SUMMARY_WORDS) {
+    return Response.json({ error: `Summary must be ${MAX_SUMMARY_WORDS} words or fewer` }, { status: 400 });
   }
 
-  const rows: [string, string][] = [
-    ["Name, Title", nameTitle],
-    ["Email", email],
-    ["Organisation", orgName],
-    ["LinkedIn / Website", link || "—"],
-  ];
-  const text = `${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nSummary:\n${summary}`;
-  const html = `<table>${rows
-    .map(([k, v]) => `<tr><td><b>${k}</b></td><td>${escapeHtml(v)}</td></tr>`)
-    .join("")}</table><p><b>Summary</b></p><p style="white-space:pre-wrap">${escapeHtml(summary)}</p>`;
+  const text = [
+    `Name, Title: ${nameTitle}`,
+    `Email: ${email}`,
+    `Organisation: ${orgName}`,
+    `LinkedIn / Website: ${link || "—"}`,
+    "",
+    "Summary:",
+    summary,
+  ].join("\n");
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -49,7 +47,6 @@ export async function POST(request: Request) {
       reply_to: email,
       subject: `Intro call request: ${orgName}`,
       text,
-      html,
     }),
   });
   if (!res.ok) {

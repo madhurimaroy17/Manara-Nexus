@@ -4,6 +4,9 @@ import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, MapPin, Globe, Shield, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { DOMAIN_RE, MAX_SUMMARY_WORDS, countWords } from "@/lib/contact";
+
+const SEND_FAILED = "Could not send your request. Please try again.";
 
 const quickLinks = [
   { label: "Home", href: "#home" },
@@ -24,6 +27,7 @@ export const Footer: React.FC = () => {
   const [orgName, setOrgName] = useState("");
   const [link, setLink] = useState("");
   const [summary, setSummary] = useState("");
+  const [website, setWebsite] = useState(""); // honeypot
   const [emailTouched, setEmailTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -35,8 +39,7 @@ export const Footer: React.FC = () => {
     if (parts.length !== 2) return { valid: false, message: "Invalid email format" };
     const domain = parts[1].trim();
     if (!domain) return { valid: false, message: "Missing domain" };
-    const domainRegex = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!domainRegex.test(domain) || domain.startsWith(".") || domain.endsWith(".")) {
+    if (!DOMAIN_RE.test(domain) || domain.startsWith(".") || domain.endsWith(".")) {
       return { valid: false, message: "Enter a valid domain (e.g. company.com)" };
     }
     return { valid: true, message: `Valid domain: ${domain}` };
@@ -45,10 +48,10 @@ export const Footer: React.FC = () => {
   const domainStatus = checkDomain(email);
 
   // Word count logic
-  const wordCount = summary.trim() ? (summary.trim().match(/\S+/g) || []).length : 0;
-  const isWordLimitExceeded = wordCount > 250;
+  const wordCount = countWords(summary);
+  const isWordLimitExceeded = wordCount > MAX_SUMMARY_WORDS;
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!domainStatus.valid) {
       setEmailTouched(true);
@@ -58,7 +61,6 @@ export const Footer: React.FC = () => {
 
     setSubmitting(true);
     setSubmitError("");
-    const website = new FormData(e.currentTarget).get("website");
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -67,10 +69,11 @@ export const Footer: React.FC = () => {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "Could not send your request. Please try again.");
+        setSubmitError(data.error || SEND_FAILED);
+        return;
       }
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Could not send your request. Please try again.");
+    } catch {
+      setSubmitError(SEND_FAILED);
       return;
     } finally {
       setSubmitting(false);
@@ -85,6 +88,7 @@ export const Footer: React.FC = () => {
       setOrgName("");
       setLink("");
       setSummary("");
+      setWebsite("");
       setEmailTouched(false);
     }, 2500);
   };
@@ -246,7 +250,7 @@ export const Footer: React.FC = () => {
                         isWordLimitExceeded ? "text-red-400 font-semibold" : "text-[#7E9A94]"
                       }`}
                     >
-                      {wordCount} / 250 words
+                      {wordCount} / {MAX_SUMMARY_WORDS} words
                     </span>
                   </div>
                   <textarea
@@ -261,7 +265,7 @@ export const Footer: React.FC = () => {
                   />
                   {isWordLimitExceeded && (
                     <p className="text-[10px] text-red-400 mt-0.5">
-                      Please limit your summary to 250 words (currently {wordCount} words).
+                      Please limit your summary to {MAX_SUMMARY_WORDS} words (currently {wordCount} words).
                     </p>
                   )}
                 </div>
@@ -270,6 +274,8 @@ export const Footer: React.FC = () => {
                 <input
                   type="text"
                   name="website"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
                   tabIndex={-1}
                   autoComplete="off"
                   aria-hidden="true"
