@@ -266,7 +266,7 @@ export const Footer: React.FC = () => {
             <div className="w-36 sm:w-40 md:w-44 flex flex-col items-center text-center">
               <div className="relative h-24 sm:h-28 md:h-32 w-full overflow-hidden rounded-none">
                 <Image
-                  src="https://res.cloudinary.com/g9q4th37/image/upload/v1791141388/Manara_Nexus_logo_draft.jpg"
+                  src="/images/manara-logo-stacked.jpg"
                   alt="Manara Nexus Logo"
                   fill
                   className="object-contain object-center"
